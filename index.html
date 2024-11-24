@@ -188,7 +188,7 @@
       globalTestData.y.push(...testData.y);
     }
     // Convert to tensors
-    globalTestData.x = tf.tensor2d(globalTestData.x);
+    globalTestData.x = tf.tensor2d(globalTestData.x, 'float32').div(tf.scalar(255));
     globalTestData.y = tf.tensor1d(globalTestData.y, 'int32');
   }
 
@@ -299,7 +299,7 @@
       });
 
       // Convert data to tensors
-      const xTrain = tf.tensor2d(client.data.x);
+      const xTrain = tf.tensor2d(client.data.x, 'float32').div(tf.scalar(255));
       const yTrain = tf.tensor1d(client.data.y, 'int32');
 
       // Train the model
@@ -322,7 +322,7 @@
 
       // Evaluate on the local test data
       const testData = await loadClientData(clientId, 'test');
-      const xTest = tf.tensor2d(testData.x);
+      const xTest = tf.tensor2d(testData.x, 'float32').div(tf.scalar(255));
       const yTest = tf.tensor1d(testData.y, 'int32');
       const evalResult = client.model.evaluate(xTest, yTest, { verbose: 0 });
       const testAcc = (await evalResult[1].data())[0];
