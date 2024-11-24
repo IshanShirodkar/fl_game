@@ -29,10 +29,6 @@ This game helps you understand:
 - Differences between IID and Non-IID data distributions
 - Model aggregation and its effects on global performance
 
-## 🚀 Getting Started
-
-Visit the webpage at: [FL-Interactive-Game](https://amanpriyanshu.github.io/FL-Interactive-Game/)
-
 ## 🎲 How to Play
 
 1. Choose your data distribution (IID or Non-IID)
@@ -69,16 +65,7 @@ Visit the webpage at: [FL-Interactive-Game](https://amanpriyanshu.github.io/FL-I
 3. Maintain good performance with high dropout rates
 4. Master both IID and Non-IID scenarios
 
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- MNIST Dataset providers
-- TensorFlow.js team
-
-## 🐛 Known Issues
+## Some Known Issues
 
 - Model states persist between data distribution switches (refresh required)
 - Some mobile devices may experience performance lag with multiple clients
