@@ -2,7 +2,7 @@
 
 An interactive web-based demonstration that makes learning about Federated Learning fun! Train models across multiple clients, experiment with different parameters, and watch your global model improve - all without sharing raw data.
 
-![FL Game Demo](demo.gif)
+![FL Game Demo](/assets/iid_demo.gif)
 
 ## 🌟 Features
 
