@@ -4,6 +4,9 @@
     <img src="/assets/iid_demo.gif" width="49%" alt="IID FL Game Demo"/>
 </div>
 
+
+Checkout the game at: [FL-Interactive-Game](https://amanpriyanshu.github.io/FL-Interactive-Game/)
+
 An interactive web-based demonstration that makes learning about Federated Learning fun! Train models across multiple clients, experiment with different parameters, and watch your global model improve - all without sharing raw data.
 
 ## 🌟 Features
