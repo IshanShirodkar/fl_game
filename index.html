@@ -1,442 +1,452 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Federated Learning MNIST Game</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        :root {
-            --primary: #9B4DCA;
-            --secondary: #FFD700;
-            --accent: #50C878;
-            --background: #F4F5F6;
-            --text: #606c76;
-            --error: #ff4444;
-            --card-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: var(--background);
-            color: var(--text);
-            line-height: 1.6;
-            padding: 20px;
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-
-        .loading-indicator {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(255, 255, 255, 0.9);
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: var(--card-shadow);
-            z-index: 1000;
-        }
-
-        body.loading .loading-indicator {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .error-message {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: var(--error);
-            color: white;
-            padding: 1rem;
-            border-radius: 4px;
-            animation: slideIn 0.3s ease-out;
-            z-index: 1000;
-        }
-
-        @keyframes slideIn {
-            from { transform: translateX(100%); }
-            to { transform: translateX(0); }
-        }
-
-        .mode-selector {
-            display: flex;
-            justify-content: center;
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .mode-button {
-            padding: 0.8rem 1.5rem;
-            border: 2px solid var(--primary);
-            background: transparent;
-            color: var(--primary);
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 1rem;
-            font-weight: 500;
-        }
-
-        .mode-button.active {
-            background: var(--primary);
-            color: white;
-        }
-
-        .global-controls {
-            display: flex;
-            justify-content: center;
-            gap: 1rem;
-            margin-bottom: 2rem;
-            flex-wrap: wrap;
-        }
-
-        .clients-grid {
-            display: grid;
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-
-        .client-card {
-            background: white;
-            border-radius: 8px;
-            padding: 1.5rem;
-            box-shadow: var(--card-shadow);
-            display: flex;
-            flex-direction: column;
-            transition: all 0.3s ease;
-        }
-
-        .client-card.loading {
-            opacity: 0.7;
-            pointer-events: none;
-        }
-
-        .client-card.training {
-            border: 2px solid var(--accent);
-        }
-
-        .client-card.error {
-            border: 2px solid var(--error);
-        }
-
-        .client-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-
-        .accuracy {
-            transition: background-color 0.3s ease;
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-        }
-
-        .accuracy.updated {
-            background-color: var(--accent);
-            color: white;
-        }
-
-        .client-controls {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-            margin-bottom: 1rem;
-        }
-
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-
-        .control-group label {
-            font-weight: 500;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .plot-container {
-            width: 100%;
-            height: 200px;
-            background: #f8f9fa;
-            border-radius: 4px;
-            margin: 1rem 0;
-        }
-
-        .button {
-            padding: 0.8rem 1rem;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 1rem;
-            font-weight: 500;
-            width: calc(100% - 2rem);
-            margin: 1rem;
-            text-align: center;
-        }
-
-        .button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .button:not(:disabled):hover {
-            opacity: 0.9;
-            transform: translateY(-1px);
-        }
-
-        .button.global-button {
-            width: auto;
-            margin: 0;
-        }
-
-        .aggregation-section {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 8px;
-            box-shadow: var(--card-shadow);
-            margin-top: 2rem;
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-
-        .global-plot {
-            width: 100%;
-            height: 300px;
-            background: #f8f9fa;
-            border-radius: 4px;
-        }
-
-        /* Slider styling */
-        input[type="range"] {
-            width: 100%;
-            height: 6px;
-            background: var(--background);
-            border-radius: 3px;
-            outline: none;
-            -webkit-appearance: none;
-        }
-
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 16px;
-            height: 16px;
-            background: var(--primary);
-            border-radius: 50%;
-            cursor: pointer;
-        }
-
-        @media (min-width: 768px) {
-            .clients-grid {
-                grid-template-columns: repeat(4, 1fr);
-            }
-        }
-
-        @media (max-width: 767px) {
-            .clients-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-
-        @media (max-width: 480px) {
-            .clients-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .client-card {
-                padding: 1rem;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Federated Learning Interactive Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Embedded CSS -->
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #1e1e1e;
+      color: #ffffff;
+      margin: 0;
+      padding: 0;
+    }
+    header, footer {
+      background-color: #2e2e2e;
+      padding: 10px;
+      text-align: center;
+    }
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      padding: 10px;
+    }
+    .client-panel {
+      background-color: #333;
+      border: 1px solid #444;
+      border-radius: 5px;
+      margin: 10px;
+      padding: 10px;
+      flex: 1 1 calc(50% - 40px); /* Adjust for margins */
+      max-width: calc(50% - 40px);
+    }
+    @media (min-width: 768px) {
+      .client-panel {
+        flex: 1 1 calc(20% - 40px);
+        max-width: calc(20% - 40px);
+      }
+    }
+    .client-panel h3 {
+      margin-top: 0;
+    }
+    .controls, .global-controls {
+      margin-top: 10px;
+    }
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      background-color: #4caf50;
+      border: none;
+      color: #fff;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    .plot-container {
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .dropdown {
+      margin: 10px;
+      text-align: center;
+    }
+    .notification {
+      background-color: #ff9800;
+      padding: 10px;
+      margin: 10px;
+      border-radius: 5px;
+    }
+  </style>
 </head>
 <body>
-    <div class="loading-indicator">
-        <div class="spinner"></div>
-        <span>Loading...</span>
+
+<header>
+  <h1>Federated Learning Interactive Game</h1>
+</header>
+
+<div class="dropdown">
+  <label for="data-selection">Select Data Distribution:</label>
+  <select id="data-selection">
+    <option value="iid">IID</option>
+    <option value="non-iid">Non-IID</option>
+  </select>
+</div>
+
+<div class="container" id="client-container">
+  <!-- Client panels will be injected here -->
+</div>
+
+<div class="global-controls">
+  <div class="controls">
+    <div class="slider-label">
+      <label for="dropout-prob">Communication Dropout Probability:</label>
+      <span id="dropout-value">0%</span>
     </div>
+    <input type="range" id="dropout-prob" min="0" max="100" value="0">
+  </div>
+  <button id="run-all">Run All Local Trainings</button>
+  <button id="aggregate">Aggregate Models</button>
+</div>
 
-    <div class="header">
-        <h1>Federated Learning MNIST</h1>
-        <p>Train local models and aggregate them in a federated setting</p>
-    </div>
+<div class="plot-container">
+  <canvas id="global-accuracy-plot"></canvas>
+</div>
 
-    <div class="mode-selector">
-        <button class="mode-button active" data-mode="iid">IID</button>
-        <button class="mode-button" data-mode="non-iid">Non-IID</button>
-    </div>
+<div class="notification" id="notification" style="display: none;">
+  <!-- Notifications will appear here -->
+</div>
 
-    <div class="global-controls">
-        <button class="button global-button" id="download-model-btn">Download Central Model</button>
-        <button class="button global-button train-all-button">Train All Clients</button>
-    </div>
+<footer>
+  <p>Created for the 30 Days of PETs Challenge</p>
+</footer>
 
-    <div class="clients-grid">
-        <!-- Client 1 -->
-        <div class="client-card" id="client1">
-            <div class="client-header">
-                <h3>Client 1</h3>
-                <span class="accuracy">Acc: 0%</span>
-            </div>
-            <div class="client-controls">
-                <div class="control-group">
-                    <label>Learning Rate <span class="value">0.01</span></label>
-                    <input type="range" min="0.001" max="0.1" step="0.001" value="0.01" 
-                           data-param="learningRate">
-                </div>
-                <div class="control-group">
-                    <label>Epochs <span class="value">5</span></label>
-                    <input type="range" min="1" max="10" step="1" value="5" 
-                           data-param="epochs">
-                </div>
-                <div class="control-group">
-                    <label>Batch Size <span class="value">32</span></label>
-                    <input type="range" min="16" max="128" step="16" value="32" 
-                           data-param="batchSize">
-                </div>
-            </div>
-            <div class="plot-container"></div>
-            <button class="button client-train-button">Train Local Model</button>
+<!-- Embedded JS -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  // Initialize global variables
+  const NUM_CLIENTS = 5;
+  let clients = [];
+  let serverModel;
+  let globalTestData = { x: null, y: null };
+  let dataDistribution = 'iid';
+  let dropoutProbability = 0;
+
+  // Initialize the application
+  document.addEventListener('DOMContentLoaded', async () => {
+    createClientPanels();
+    await loadGlobalTestData();
+    initializeServerModel();
+    setupEventListeners();
+    initializeGlobalPlot();
+  });
+
+  function createClientPanels() {
+    const container = document.getElementById('client-container');
+    container.innerHTML = '';
+    for (let i = 1; i <= NUM_CLIENTS; i++) {
+      const panel = document.createElement('div');
+      panel.className = 'client-panel';
+      panel.id = `client-${i}`;
+      panel.innerHTML = `
+        <h3>Client ${i}</h3>
+        <div class="controls">
+          <div class="slider-label">
+            <label for="lr-${i}">Learning Rate:</label>
+            <span id="lr-value-${i}">0.01</span>
+          </div>
+          <input type="range" id="lr-${i}" min="0.001" max="0.1" value="0.01" step="0.001">
+          <div class="slider-label">
+            <label for="epochs-${i}">Epochs:</label>
+            <span id="epochs-value-${i}">1</span>
+          </div>
+          <input type="range" id="epochs-${i}" min="1" max="10" value="1">
         </div>
+        <button id="train-local-${i}">Train Local</button>
+        <canvas id="accuracy-plot-${i}" width="200" height="150"></canvas>
+      `;
+      container.appendChild(panel);
+      clients.push({
+        id: i,
+        model: null,
+        data: null,
+        accuracyHistory: [],
+        plot: null,
+      });
+    }
+  }
 
-        <div class="client-card" id="client2">
-            <div class="client-header">
-                <h3>Client 2</h3>
-                <span class="accuracy">Acc: 0%</span>
-            </div>
-            <div class="client-controls">
-                <div class="control-group">
-                    <label>Learning Rate <span class="value">0.01</span></label>
-                    <input type="range" min="0.001" max="0.1" step="0.001" value="0.01" 
-                           data-param="learningRate">
-                </div>
-                <div class="control-group">
-                    <label>Epochs <span class="value">5</span></label>
-                    <input type="range" min="1" max="10" step="1" value="5" 
-                           data-param="epochs">
-                </div>
-                <div class="control-group">
-                    <label>Batch Size <span class="value">32</span></label>
-                    <input type="range" min="16" max="128" step="16" value="32" 
-                           data-param="batchSize">
-                </div>
-            </div>
-            <div class="plot-container"></div>
-            <button class="button client-train-button">Train Local Model</button>
-        </div>
+  async function loadGlobalTestData() {
+    // Load global test data by combining clients' test data
+    globalTestData.x = [];
+    globalTestData.y = [];
+    for (let i = 1; i <= NUM_CLIENTS; i++) {
+      const testData = await loadClientData(i, 'test');
+      globalTestData.x.push(...testData.x);
+      globalTestData.y.push(...testData.y);
+    }
+    // Convert to tensors
+    globalTestData.x = tf.tensor2d(globalTestData.x);
+    globalTestData.y = tf.tensor1d(globalTestData.y, 'int32');
+  }
 
-        <div class="client-card" id="client3">
-            <div class="client-header">
-                <h3>Client 3</h3>
-                <span class="accuracy">Acc: 0%</span>
-            </div>
-            <div class="client-controls">
-                <div class="control-group">
-                    <label>Learning Rate <span class="value">0.01</span></label>
-                    <input type="range" min="0.001" max="0.1" step="0.001" value="0.01" 
-                           data-param="learningRate">
-                </div>
-                <div class="control-group">
-                    <label>Epochs <span class="value">5</span></label>
-                    <input type="range" min="1" max="10" step="1" value="5" 
-                           data-param="epochs">
-                </div>
-                <div class="control-group">
-                    <label>Batch Size <span class="value">32</span></label>
-                    <input type="range" min="16" max="128" step="16" value="32" 
-                           data-param="batchSize">
-                </div>
-            </div>
-            <div class="plot-container"></div>
-            <button class="button client-train-button">Train Local Model</button>
-        </div>
+  function initializeServerModel() {
+    // Create a simple MLP model
+    serverModel = createModel();
+  }
 
-        <div class="client-card" id="client4">
-            <div class="client-header">
-                <h3>Client 4</h3>
-                <span class="accuracy">Acc: 0%</span>
-            </div>
-            <div class="client-controls">
-                <div class="control-group">
-                    <label>Learning Rate <span class="value">0.01</span></label>
-                    <input type="range" min="0.001" max="0.1" step="0.001" value="0.01" 
-                           data-param="learningRate">
-                </div>
-                <div class="control-group">
-                    <label>Epochs <span class="value">5</span></label>
-                    <input type="range" min="1" max="10" step="1" value="5" 
-                           data-param="epochs">
-                </div>
-                <div class="control-group">
-                    <label>Batch Size <span class="value">32</span></label>
-                    <input type="range" min="16" max="128" step="16" value="32" 
-                           data-param="batchSize">
-                </div>
-            </div>
-            <div class="plot-container"></div>
-            <button class="button client-train-button">Train Local Model</button>
-        </div>
+  function setupEventListeners() {
+    // Data selection change
+    document.getElementById('data-selection').addEventListener('change', async (e) => {
+      dataDistribution = e.target.value;
+      await reloadClientData();
+    });
 
-        <div class="client-card" id="client5">
-            <div class="client-header">
-                <h3>Client 5</h3>
-                <span class="accuracy">Acc: 0%</span>
-            </div>
-            <div class="client-controls">
-                <div class="control-group">
-                    <label>Learning Rate <span class="value">0.01</span></label>
-                    <input type="range" min="0.001" max="0.1" step="0.001" value="0.01" 
-                           data-param="learningRate">
-                </div>
-                <div class="control-group">
-                    <label>Epochs <span class="value">5</span></label>
-                    <input type="range" min="1" max="10" step="1" value="5" 
-                           data-param="epochs">
-                </div>
-                <div class="control-group">
-                    <label>Batch Size <span class="value">32</span></label>
-                    <input type="range" min="16" max="128" step="16" value="32" 
-                           data-param="batchSize">
-                </div>
-            </div>
-            <div class="plot-container"></div>
-            <button class="button client-train-button">Train Local Model</button>
-        </div>
+    // Dropout probability slider
+    document.getElementById('dropout-prob').addEventListener('input', (e) => {
+      dropoutProbability = parseInt(e.target.value);
+      document.getElementById('dropout-value').innerText = `${dropoutProbability}%`;
+    });
 
-        <!-- Clients 2-5 (identical structure, different IDs) -->
-        <!-- Copy client1 div four more times, updating the ID and title to client2, client3, etc. -->
+    // Train all clients
+    document.getElementById('run-all').addEventListener('click', () => {
+      clients.forEach((client) => trainLocalModel(client.id));
+    });
 
-    </div>
+    // Aggregate models
+    document.getElementById('aggregate').addEventListener('click', aggregateModels);
 
-    <div class="aggregation-section">
-        <h2>Model Aggregation</h2>
-        <div class="control-group">
-            <label>Communication Dropout Probability <span class="value dropout-value">1.0</span></label>
-            <input type="range" min="0" max="1" step="0.1" value="1" id="dropout-slider">
-        </div>
-        <button class="button aggregate-button">Aggregate Models</button>
-        <div class="global-plot"></div>
-    </div>
+    // Client-specific event listeners
+    clients.forEach((client) => {
+      // Learning rate slider
+      document.getElementById(`lr-${client.id}`).addEventListener('input', (e) => {
+        const lr = parseFloat(e.target.value);
+        document.getElementById(`lr-value-${client.id}`).innerText = lr.toFixed(3);
+      });
 
-    <script type="module" src="core.js"></script>
+      // Epochs slider
+      document.getElementById(`epochs-${client.id}`).addEventListener('input', (e) => {
+        const epochs = parseInt(e.target.value);
+        document.getElementById(`epochs-value-${client.id}`).innerText = epochs;
+      });
+
+      // Train local model
+      document.getElementById(`train-local-${client.id}`).addEventListener('click', () => {
+        trainLocalModel(client.id);
+      });
+    });
+  }
+
+  async function reloadClientData() {
+    // Reload data for each client
+    for (let client of clients) {
+      client.data = await loadClientData(client.id, 'train');
+    }
+  }
+
+  async function loadClientData(clientId, dataType) {
+    const response = await fetch(`data/${dataDistribution}/client${clientId}.json`);
+    const data = await response.json();
+    const x = dataType === 'train' ? data.x_train : data.x_test;
+    const y = dataType === 'train' ? data.y_train : data.y_test;
+    return {
+      x: x,
+      y: y,
+    };
+  }
+
+  function createModel() {
+    const model = tf.sequential();
+    model.add(tf.layers.dense({ units: 64, activation: 'relu', inputShape: [784] }));
+    model.add(tf.layers.dense({ units: 10, activation: 'softmax' }));
+    model.compile({
+      optimizer: tf.train.adam(),
+      loss: 'sparseCategoricalCrossentropy',
+      metrics: ['accuracy'],
+    });
+    return model;
+  }
+
+  async function trainLocalModel(clientId) {
+    const client = clients.find((c) => c.id === clientId);
+
+    // Simulate communication dropout
+    if (Math.random() < dropoutProbability / 100) {
+      showNotification(`Client ${clientId} dropped out during communication.`);
+      return;
+    }
+
+    // Load data if not already loaded
+    if (!client.data) {
+      client.data = await loadClientData(clientId, 'train');
+    }
+
+    // Create or clone the model
+    client.model = cloneModel(serverModel);
+
+    // Get training parameters
+    const lr = parseFloat(document.getElementById(`lr-${clientId}`).value);
+    const epochs = parseInt(document.getElementById(`epochs-${clientId}`).value);
+
+    // Update the optimizer learning rate
+    client.model.compile({
+      optimizer: tf.train.adam(lr),
+      loss: 'sparseCategoricalCrossentropy',
+      metrics: ['accuracy'],
+    });
+
+    // Convert data to tensors
+    const xTrain = tf.tensor2d(client.data.x);
+    const yTrain = tf.tensor1d(client.data.y, 'int32');
+
+    // Train the model
+    await client.model.fit(xTrain, yTrain, {
+      epochs: epochs,
+      verbose: 0,
+      callbacks: {
+        onEpochEnd: async (epoch, logs) => {
+          // Update local accuracy plot
+          const acc = logs.acc;
+          client.accuracyHistory.push(acc);
+          updateClientPlot(clientId);
+        },
+      },
+    });
+
+    // Clean up tensors
+    xTrain.dispose();
+    yTrain.dispose();
+
+    // Evaluate on the local test data
+    const testData = await loadClientData(clientId, 'test');
+    const xTest = tf.tensor2d(testData.x);
+    const yTest = tf.tensor1d(testData.y, 'int32');
+    const evalResult = client.model.evaluate(xTest, yTest, { verbose: 0 });
+    const testAcc = (await evalResult[1].data())[0];
+    showNotification(`Client ${clientId} Test Accuracy: ${(testAcc * 100).toFixed(2)}%`);
+    xTest.dispose();
+    yTest.dispose();
+  }
+
+  function cloneModel(model) {
+    const newModel = tf.sequential();
+    for (const layer of model.layers) {
+      newModel.add(layer.clone());
+    }
+    newModel.compile({
+      optimizer: model.optimizer.clone(),
+      loss: model.loss,
+      metrics: model.metrics,
+    });
+    return newModel;
+  }
+
+  async function aggregateModels() {
+    // Collect models from clients
+    const clientModels = clients
+      .filter((client) => client.model)
+      .map((client) => client.model);
+
+    if (clientModels.length === 0) {
+      showNotification('No client models available for aggregation.');
+      return;
+    }
+
+    // Average the weights
+    const averagedWeights = averageWeights(clientModels);
+    serverModel.setWeights(averagedWeights);
+
+    // Evaluate on global test data
+    const evalResult = serverModel.evaluate(globalTestData.x, globalTestData.y, { verbose: 0 });
+    const globalAcc = (await evalResult[1].data())[0];
+    updateGlobalPlot(globalAcc);
+    showNotification(`Global Model Accuracy: ${(globalAcc * 100).toFixed(2)}%`);
+  }
+
+  function averageWeights(models) {
+    const weightArrays = models.map((model) => model.getWeights());
+    const numModels = weightArrays.length;
+    const averaged = [];
+
+    for (let layer = 0; layer < weightArrays[0].length; layer++) {
+      let sum = weightArrays[0][layer].clone();
+      for (let i = 1; i < numModels; i++) {
+        sum = tf.add(sum, weightArrays[i][layer]);
+      }
+      averaged.push(tf.div(sum, numModels));
+    }
+    return averaged;
+  }
+
+  function initializeGlobalPlot() {
+    const ctx = document.getElementById('global-accuracy-plot').getContext('2d');
+    window.globalChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Global Accuracy',
+          data: [],
+          borderColor: '#4caf50',
+          fill: false,
+        }],
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: { display: true, title: { display: true, text: 'Aggregation Rounds' } },
+          y: { display: true, title: { display: true, text: 'Accuracy' }, min: 0, max: 1 },
+        },
+      },
+    });
+  }
+
+  function updateGlobalPlot(accuracy) {
+    window.globalChart.data.labels.push(window.globalChart.data.labels.length + 1);
+    window.globalChart.data.datasets[0].data.push(accuracy);
+    window.globalChart.update();
+  }
+
+  function updateClientPlot(clientId) {
+    const client = clients.find((c) => c.id === clientId);
+    if (!client.plot) {
+      const ctx = document.getElementById(`accuracy-plot-${clientId}`).getContext('2d');
+      client.plot = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: client.accuracyHistory.map((_, i) => i + 1),
+          datasets: [{
+            label: `Client ${clientId} Accuracy`,
+            data: client.accuracyHistory,
+            borderColor: '#2196f3',
+            fill: false,
+          }],
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: { display: true, title: { display: true, text: 'Epochs' } },
+            y: { display: true, title: { display: true, text: 'Accuracy' }, min: 0, max: 1 },
+          },
+        },
+      });
+    } else {
+      client.plot.data.labels.push(client.accuracyHistory.length);
+      client.plot.data.datasets[0].data.push(client.accuracyHistory[client.accuracyHistory.length - 1]);
+      client.plot.update();
+    }
+  }
+
+  function showNotification(message) {
+    const notification = document.getElementById('notification');
+    notification.innerText = message;
+    notification.style.display = 'block';
+    setTimeout(() => {
+      notification.style.display = 'none';
+    }, 5000);
+  }
+</script>
+
 </body>
 </html>
