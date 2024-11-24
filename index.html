@@ -28,7 +28,7 @@
       border: 1px solid #444;
       border-radius: 5px;
       margin: 10px;
-      padding: 10px;
+      padding: 15px;
       flex: 1 1 calc(50% - 40px);
       max-width: calc(50% - 40px);
     }
@@ -36,6 +36,21 @@
       .client-panel {
         flex: 1 1 calc(20% - 40px);
         max-width: calc(20% - 40px);
+      }
+    }
+    @media (max-width: 768px) {
+      .client-panel {
+        flex: 1 1 100% !important;
+        max-width: 100% !important;
+      }
+      
+      .client-panel canvas {
+        min-height: 200px !important;
+      }
+
+      .slider-label {
+        font-size: 14px;
+        margin-bottom: 8px;
       }
     }
     .client-panel h3 {
@@ -47,6 +62,16 @@
     .slider-label {
       display: flex;
       justify-content: space-between;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+    .slider-label label {
+      flex: 1;
+      margin-right: 10px;
+    }
+    .slider-label span {
+      min-width: 60px;
+      text-align: right;
     }
     button {
       width: 100%;
@@ -71,30 +96,29 @@
       text-align: center;
     }
     .notification {
-    position: fixed;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 1000;
-    background-color: #ff9800;
-    padding: 15px 25px;
-    margin: 10px;
-    border-radius: 5px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    animation: slideDown 0.3s ease-out;
-  }
-
-  @keyframes slideDown {
-    from {
-      transform: translate(-50%, -100%);
-      opacity: 0;
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background-color: #ff9800;
+      padding: 15px 25px;
+      margin: 10px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      animation: slideDown 0.3s ease-out;
     }
-    to {
-      transform: translate(-50%, 0);
-      opacity: 1;
+    @keyframes slideDown {
+      from {
+        transform: translate(-50%, -100%);
+        opacity: 0;
+      }
+      to {
+        transform: translate(-50%, 0);
+        opacity: 1;
+      }
     }
-  }
-  </style>
+</style>
 </head>
 <body>
 
@@ -154,41 +178,65 @@
       initializeGlobalPlot();
     });
 
+  function formatLearningRate(lr) {
+    const exponent = Math.floor(Math.log10(lr));
+    const base = lr * Math.pow(10, -exponent);
+    return `${base.toFixed(2)}×10${formatSuperscript(exponent)}`;
+  }
+
+  function formatSuperscript(num) {
+    const superscripts = {
+        '-': '⁻',
+        '0': '⁰',
+        '1': '¹',
+        '2': '²',
+        '3': '³',
+        '4': '⁴',
+        '5': '⁵',
+        '6': '⁶',
+        '7': '⁷',
+        '8': '⁸',
+        '9': '⁹'
+    };
+    return num.toString().split('').map(char => superscripts[char] || char).join('');
+  }
+
   function createClientPanels() {
     const container = document.getElementById('client-container');
     container.innerHTML = '';
     for (let i = 1; i <= NUM_CLIENTS; i++) {
-      const panel = document.createElement('div');
-      panel.className = 'client-panel';
-      panel.id = `client-${i}`;
-      panel.innerHTML = `
-        <h3>Client ${i}</h3>
-        <div class="controls">
-          <div class="slider-label">
-            <label for="lr-${i}">Learning Rate:</label>
-            <span id="lr-value-${i}">0.00005</span>
-          </div>
-          <input type="range" id="lr-${i}" min="0.00001" max="0.001" value="0.00005" step="0.00001">
-          <div class="slider-label">
-            <label for="epochs-${i}">Epochs:</label>
-            <span id="epochs-value-${i}">5</span>
-          </div>
-          <input type="range" id="epochs-${i}" min="5" max="15" value="1">
-        </div>
-        <button id="train-local-${i}">Train Local</button>
-        <canvas id="accuracy-plot-${i}" width="200" height="150"></canvas>
-      `;
-      container.appendChild(panel);
-      clients.push({
-        id: i,
-        model: null,
-        data: null,
-        accuracyHistory: [],
-        plot: null,
-      });
+        const panel = document.createElement('div');
+        panel.className = 'client-panel';
+        panel.id = `client-${i}`;
+        panel.innerHTML = `
+            <h3>Client ${i}</h3>
+            <div class="controls">
+                <div class="slider-label">
+                    <label for="lr-${i}">Learning Rate:</label>
+                    <span id="lr-value-${i}">0.00005</span>
+                </div>
+                <input type="range" id="lr-${i}" min="0.00001" max="0.001" value="0.00005" step="0.00001">
+                <div class="slider-label">
+                    <label for="epochs-${i}">Epochs:</label>
+                    <span id="epochs-value-${i}">5</span>
+                </div>
+                <input type="range" id="epochs-${i}" min="5" max="15" value="5">
+            </div>
+            <button id="train-local-${i}">Train Local</button>
+            <div style="height: 200px; margin-top: 10px;">
+                <canvas id="accuracy-plot-${i}"></canvas>
+            </div>
+        `;
+        container.appendChild(panel);
+        clients.push({
+            id: i,
+            model: null,
+            data: null,
+            accuracyHistory: [],
+            plot: null,
+        });
     }
-    console.log("Created the client panels");
-  }
+}
 
   async function loadGlobalTestData() {
     globalTestData.x = [];
@@ -222,9 +270,11 @@
     document.getElementById('aggregate').addEventListener('click', aggregateModels);
     clients.forEach((client) => {
       document.getElementById(`lr-${client.id}`).addEventListener('input', (e) => {
-        const lr = parseFloat(e.target.value);
-        document.getElementById(`lr-value-${client.id}`).innerText = lr.toFixed(3);
-      });
+            const lr = parseFloat(e.target.value);
+            document.getElementById(`lr-value-${client.id}`).innerText = formatLearningRate(lr);
+        });
+        const initialLr = parseFloat(document.getElementById(`lr-${client.id}`).value);
+        document.getElementById(`lr-value-${client.id}`).innerText = formatLearningRate(initialLr);
 
       document.getElementById(`epochs-${client.id}`).addEventListener('input', (e) => {
         const epochs = parseInt(e.target.value);
@@ -423,6 +473,8 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
+                aspectRatio: 2,
                 scales: {
                     x: {
                         type: 'linear',
@@ -442,6 +494,12 @@
                         max: 1
                     },
                 },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                }
             },
         });
     } else {
