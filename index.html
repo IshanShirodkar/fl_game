@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Federated Learning MNIST Game</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --primary: #9B4DCA;
@@ -11,6 +13,7 @@
             --accent: #50C878;
             --background: #F4F5F6;
             --text: #606c76;
+            --error: #ff4444;
             --card-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
@@ -31,6 +34,43 @@
         .header {
             text-align: center;
             margin-bottom: 2rem;
+        }
+
+        .loading-indicator {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: var(--card-shadow);
+            z-index: 1000;
+        }
+
+        body.loading .loading-indicator {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .error-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--error);
+            color: white;
+            padding: 1rem;
+            border-radius: 4px;
+            animation: slideIn 0.3s ease-out;
+            z-index: 1000;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
         }
 
         .mode-selector {
@@ -78,6 +118,20 @@
             box-shadow: var(--card-shadow);
             display: flex;
             flex-direction: column;
+            transition: all 0.3s ease;
+        }
+
+        .client-card.loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .client-card.training {
+            border: 2px solid var(--accent);
+        }
+
+        .client-card.error {
+            border: 2px solid var(--error);
         }
 
         .client-header {
@@ -85,6 +139,17 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 1rem;
+        }
+
+        .accuracy {
+            transition: background-color 0.3s ease;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .accuracy.updated {
+            background-color: var(--accent);
+            color: white;
         }
 
         .client-controls {
@@ -100,12 +165,48 @@
             gap: 0.5rem;
         }
 
+        .control-group label {
+            font-weight: 500;
+            display: flex;
+            justify-content: space-between;
+        }
+
         .plot-container {
             width: 100%;
             height: 200px;
             background: #f8f9fa;
             border-radius: 4px;
             margin: 1rem 0;
+        }
+
+        .button {
+            padding: 0.8rem 1rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+            font-weight: 500;
+            width: calc(100% - 2rem);
+            margin: 1rem;
+            text-align: center;
+        }
+
+        .button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .button:not(:disabled):hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .button.global-button {
+            width: auto;
+            margin: 0;
         }
 
         .aggregation-section {
@@ -133,6 +234,7 @@
             background: var(--background);
             border-radius: 3px;
             outline: none;
+            -webkit-appearance: none;
         }
 
         input[type="range"]::-webkit-slider-thumb {
@@ -144,37 +246,6 @@
             cursor: pointer;
         }
 
-        /* Button styling */
-        .button {
-            padding: 0.8rem 1rem;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 1rem;
-            font-weight: 500;
-            width: calc(100% - 2rem);  /* Full width minus margins */
-            margin: 1rem;
-            text-align: center;
-        }
-
-        .button.global-button {
-            width: auto;  /* Keep original width for global controls */
-            margin: 0;
-        }
-
-        .button:hover {
-            opacity: 0.9;
-            transform: translateY(-1px);
-        }
-
-        .client-train-button {
-            margin-top: auto;  /* Push to bottom of flex container */
-        }
-
-        /* Responsive layout */
         @media (min-width: 768px) {
             .clients-grid {
                 grid-template-columns: repeat(4, 1fr);
@@ -199,167 +270,173 @@
     </style>
 </head>
 <body>
+    <div class="loading-indicator">
+        <div class="spinner"></div>
+        <span>Loading...</span>
+    </div>
+
     <div class="header">
         <h1>Federated Learning MNIST</h1>
+        <p>Train local models and aggregate them in a federated setting</p>
     </div>
 
     <div class="mode-selector">
-        <button class="mode-button active">IID</button>
-        <button class="mode-button">Non-IID</button>
+        <button class="mode-button active" data-mode="iid">IID</button>
+        <button class="mode-button" data-mode="non-iid">Non-IID</button>
     </div>
 
     <div class="global-controls">
-        <button class="button global-button">Download Central Model</button>
-        <button class="button global-button">Train All Clients</button>
+        <button class="button global-button" id="download-model-btn">Download Central Model</button>
+        <button class="button global-button train-all-button">Train All Clients</button>
     </div>
 
     <div class="clients-grid">
         <!-- Client 1 -->
-        <div class="client-card">
+        <div class="client-card" id="client1">
             <div class="client-header">
                 <h3>Client 1</h3>
                 <span class="accuracy">Acc: 0%</span>
             </div>
             <div class="client-controls">
                 <div class="control-group">
-                    <label>Learning Rate</label>
-                    <input type="range" min="0.001" max="0.1" step="0.001" value="0.01">
-                    <span class="value">0.01</span>
+                    <label>Learning Rate <span class="value">0.01</span></label>
+                    <input type="range" min="0.001" max="0.1" step="0.001" value="0.01" 
+                           data-param="learningRate">
                 </div>
                 <div class="control-group">
-                    <label>Epochs</label>
-                    <input type="range" min="1" max="10" step="1" value="5">
-                    <span class="value">5</span>
+                    <label>Epochs <span class="value">5</span></label>
+                    <input type="range" min="1" max="10" step="1" value="5" 
+                           data-param="epochs">
                 </div>
                 <div class="control-group">
-                    <label>Batch Size</label>
-                    <input type="range" min="16" max="128" step="16" value="32">
-                    <span class="value">32</span>
+                    <label>Batch Size <span class="value">32</span></label>
+                    <input type="range" min="16" max="128" step="16" value="32" 
+                           data-param="batchSize">
                 </div>
             </div>
             <div class="plot-container"></div>
             <button class="button client-train-button">Train Local Model</button>
         </div>
 
-        <!-- Client 2 -->
-        <div class="client-card">
+        <div class="client-card" id="client2">
             <div class="client-header">
                 <h3>Client 2</h3>
                 <span class="accuracy">Acc: 0%</span>
             </div>
             <div class="client-controls">
                 <div class="control-group">
-                    <label>Learning Rate</label>
-                    <input type="range" min="0.001" max="0.1" step="0.001" value="0.01">
-                    <span class="value">0.01</span>
+                    <label>Learning Rate <span class="value">0.01</span></label>
+                    <input type="range" min="0.001" max="0.1" step="0.001" value="0.01" 
+                           data-param="learningRate">
                 </div>
                 <div class="control-group">
-                    <label>Epochs</label>
-                    <input type="range" min="1" max="10" step="1" value="5">
-                    <span class="value">5</span>
+                    <label>Epochs <span class="value">5</span></label>
+                    <input type="range" min="1" max="10" step="1" value="5" 
+                           data-param="epochs">
                 </div>
                 <div class="control-group">
-                    <label>Batch Size</label>
-                    <input type="range" min="16" max="128" step="16" value="32">
-                    <span class="value">32</span>
+                    <label>Batch Size <span class="value">32</span></label>
+                    <input type="range" min="16" max="128" step="16" value="32" 
+                           data-param="batchSize">
                 </div>
             </div>
             <div class="plot-container"></div>
             <button class="button client-train-button">Train Local Model</button>
         </div>
 
-        <!-- Client 3 -->
-        <div class="client-card">
+        <div class="client-card" id="client3">
             <div class="client-header">
                 <h3>Client 3</h3>
                 <span class="accuracy">Acc: 0%</span>
             </div>
             <div class="client-controls">
                 <div class="control-group">
-                    <label>Learning Rate</label>
-                    <input type="range" min="0.001" max="0.1" step="0.001" value="0.01">
-                    <span class="value">0.01</span>
+                    <label>Learning Rate <span class="value">0.01</span></label>
+                    <input type="range" min="0.001" max="0.1" step="0.001" value="0.01" 
+                           data-param="learningRate">
                 </div>
                 <div class="control-group">
-                    <label>Epochs</label>
-                    <input type="range" min="1" max="10" step="1" value="5">
-                    <span class="value">5</span>
+                    <label>Epochs <span class="value">5</span></label>
+                    <input type="range" min="1" max="10" step="1" value="5" 
+                           data-param="epochs">
                 </div>
                 <div class="control-group">
-                    <label>Batch Size</label>
-                    <input type="range" min="16" max="128" step="16" value="32">
-                    <span class="value">32</span>
+                    <label>Batch Size <span class="value">32</span></label>
+                    <input type="range" min="16" max="128" step="16" value="32" 
+                           data-param="batchSize">
                 </div>
             </div>
             <div class="plot-container"></div>
             <button class="button client-train-button">Train Local Model</button>
         </div>
 
-        <!-- Client 4 -->
-        <div class="client-card">
+        <div class="client-card" id="client4">
             <div class="client-header">
                 <h3>Client 4</h3>
                 <span class="accuracy">Acc: 0%</span>
             </div>
             <div class="client-controls">
                 <div class="control-group">
-                    <label>Learning Rate</label>
-                    <input type="range" min="0.001" max="0.1" step="0.001" value="0.01">
-                    <span class="value">0.01</span>
+                    <label>Learning Rate <span class="value">0.01</span></label>
+                    <input type="range" min="0.001" max="0.1" step="0.001" value="0.01" 
+                           data-param="learningRate">
                 </div>
                 <div class="control-group">
-                    <label>Epochs</label>
-                    <input type="range" min="1" max="10" step="1" value="5">
-                    <span class="value">5</span>
+                    <label>Epochs <span class="value">5</span></label>
+                    <input type="range" min="1" max="10" step="1" value="5" 
+                           data-param="epochs">
                 </div>
                 <div class="control-group">
-                    <label>Batch Size</label>
-                    <input type="range" min="16" max="128" step="16" value="32">
-                    <span class="value">32</span>
+                    <label>Batch Size <span class="value">32</span></label>
+                    <input type="range" min="16" max="128" step="16" value="32" 
+                           data-param="batchSize">
                 </div>
             </div>
             <div class="plot-container"></div>
             <button class="button client-train-button">Train Local Model</button>
         </div>
 
-        <!-- Client 5 -->
-        <div class="client-card">
+        <div class="client-card" id="client5">
             <div class="client-header">
                 <h3>Client 5</h3>
                 <span class="accuracy">Acc: 0%</span>
             </div>
             <div class="client-controls">
                 <div class="control-group">
-                    <label>Learning Rate</label>
-                    <input type="range" min="0.001" max="0.1" step="0.001" value="0.01">
-                    <span class="value">0.01</span>
+                    <label>Learning Rate <span class="value">0.01</span></label>
+                    <input type="range" min="0.001" max="0.1" step="0.001" value="0.01" 
+                           data-param="learningRate">
                 </div>
                 <div class="control-group">
-                    <label>Epochs</label>
-                    <input type="range" min="1" max="10" step="1" value="5">
-                    <span class="value">5</span>
+                    <label>Epochs <span class="value">5</span></label>
+                    <input type="range" min="1" max="10" step="1" value="5" 
+                           data-param="epochs">
                 </div>
                 <div class="control-group">
-                    <label>Batch Size</label>
-                    <input type="range" min="16" max="128" step="16" value="32">
-                    <span class="value">32</span>
+                    <label>Batch Size <span class="value">32</span></label>
+                    <input type="range" min="16" max="128" step="16" value="32" 
+                           data-param="batchSize">
                 </div>
             </div>
             <div class="plot-container"></div>
             <button class="button client-train-button">Train Local Model</button>
         </div>
 
+        <!-- Clients 2-5 (identical structure, different IDs) -->
+        <!-- Copy client1 div four more times, updating the ID and title to client2, client3, etc. -->
+
     </div>
 
     <div class="aggregation-section">
         <h2>Model Aggregation</h2>
         <div class="control-group">
-            <label>Communication Dropout Probability</label>
-            <input type="range" min="0" max="1" step="0.1" value="1">
-            <span class="value">1.0</span>
+            <label>Communication Dropout Probability <span class="value dropout-value">1.0</span></label>
+            <input type="range" min="0" max="1" step="0.1" value="1" id="dropout-slider">
         </div>
-        <button class="button">Aggregate Models</button>
+        <button class="button aggregate-button">Aggregate Models</button>
         <div class="global-plot"></div>
     </div>
+
+    <script type="module" src="core.js"></script>
 </body>
 </html>
