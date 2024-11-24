@@ -129,6 +129,33 @@
   <h1>Federated Learning Interactive Game</h1>
 </header>
 
+<div class="intro-section" style="background-color: #2e2e2e; margin: 20px auto; padding: 20px; max-width: 800px; border-radius: 8px; line-height: 1.6;">
+  <h2 style="color: #4caf50; margin-bottom: 15px;">Welcome to the FL Interactive Game! 🎮</h2>
+  
+  <p>This interactive game helps you understand Federated Learning (FL) - a privacy-preserving machine learning approach where multiple devices train on their local data and collaborate to build a better global model.</p>
+  
+  <h3 style="color: #4caf50; margin-top: 20px;">How to Play:</h3>
+  <ol style="margin-left: 20px;">
+    <li>Choose between IID (balanced data) or Non-IID (chaos mode). Oh, and don't forget to refresh when switching - old server models might still exist on your client-side! 🔄</li>
+    <li>Adjust each client's learning rate and number of epochs using the sliders</li>
+    <li>Click "Train Local" on individual clients or "Run All Local Trainings" to start training</li>
+    <li>Use "Aggregate Models" to combine client models into a global model</li>
+    <li>Set a communication dropout probability to simulate real-world conditions</li>
+  </ol>
+
+  <h3 style="color: #4caf50; margin-top: 20px;">What to Watch:</h3>
+  <ul style="margin-left: 20px;">
+    <li>Individual client accuracy plots show how well each client learns from its local data</li>
+    <li>The global accuracy plot shows how well the combined model performs</li>
+    <li>Notifications appear when clients complete training or drop out</li>
+  </ul>
+
+  <p style="margin-top: 15px;"><strong>Goal:</strong> Try to achieve the highest possible global model accuracy by experimenting with different settings and strategies! Can you beat 90% accuracy? 🎯</p>
+
+  <p style="margin-top: 15px;">Scroll to the <strong>Run All Local Trainings button</strong> below</p>
+
+</div>
+
 <div class="dropdown">
   <label for="data-selection">Select Data Distribution:</label>
   <select id="data-selection">
