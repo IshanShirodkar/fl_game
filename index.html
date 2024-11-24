@@ -125,22 +125,23 @@
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-  // Initialize global variables
-  const NUM_CLIENTS = 5;
-  let clients = [];
-  let serverModel;
-  let globalTestData = { x: null, y: null };
-  let dataDistribution = 'iid';
-  let dropoutProbability = 0;
+    // Initialize global variables
+    const NUM_CLIENTS = 5;
+    let clients = [];
+    let serverModel;
+    let globalTestData = { x: null, y: null };
+    let dataDistribution = 'iid';
+    let dropoutProbability = 0;
 
-  // Initialize the application
-  document.addEventListener('DOMContentLoaded', async () => {
-    createClientPanels();
-    await loadGlobalTestData();
-    initializeServerModel();
-    setupEventListeners();
-    initializeGlobalPlot();
-  });
+    // Initialize the application
+    document.addEventListener('DOMContentLoaded', async () => {
+      createClientPanels();
+      await loadGlobalTestData();
+      initializeServerModel();
+      await reloadClientData(); // Ensure client data is loaded initially
+      setupEventListeners();
+      initializeGlobalPlot();
+    });
 
   function createClientPanels() {
     const container = document.getElementById('client-container');
@@ -269,115 +270,115 @@
   }
 
   async function trainLocalModel(clientId) {
-    const client = clients.find((c) => c.id === clientId);
+      const client = clients.find((c) => c.id === clientId);
 
-    // Simulate communication dropout
-    if (Math.random() < dropoutProbability / 100) {
-      showNotification(`Client ${clientId} dropped out during communication.`);
-      return;
-    }
-
-    // Load data if not already loaded
-    if (!client.data) {
-      client.data = await loadClientData(clientId, 'train');
-    }
-
-    // Create or clone the model
-    client.model = cloneModel(serverModel);
-
-    // Get training parameters
-    const lr = parseFloat(document.getElementById(`lr-${clientId}`).value);
-    const epochs = parseInt(document.getElementById(`epochs-${clientId}`).value);
-
-    // Update the optimizer learning rate
-    client.model.compile({
-      optimizer: tf.train.adam(lr),
-      loss: 'sparseCategoricalCrossentropy',
-      metrics: ['accuracy'],
-    });
-
-    // Convert data to tensors
-    const xTrain = tf.tensor2d(client.data.x);
-    const yTrain = tf.tensor1d(client.data.y, 'int32');
-
-    // Train the model
-    await client.model.fit(xTrain, yTrain, {
-      epochs: epochs,
-      verbose: 0,
-      callbacks: {
-        onEpochEnd: async (epoch, logs) => {
-          // Update local accuracy plot
-          const acc = logs.acc;
-          client.accuracyHistory.push(acc);
-          updateClientPlot(clientId);
-        },
-      },
-    });
-
-    // Clean up tensors
-    xTrain.dispose();
-    yTrain.dispose();
-
-    // Evaluate on the local test data
-    const testData = await loadClientData(clientId, 'test');
-    const xTest = tf.tensor2d(testData.x);
-    const yTest = tf.tensor1d(testData.y, 'int32');
-    const evalResult = client.model.evaluate(xTest, yTest, { verbose: 0 });
-    const testAcc = (await evalResult[1].data())[0];
-    showNotification(`Client ${clientId} Test Accuracy: ${(testAcc * 100).toFixed(2)}%`);
-    xTest.dispose();
-    yTest.dispose();
-  }
-
-  function cloneModel(model) {
-    const newModel = tf.sequential();
-    for (const layer of model.layers) {
-      newModel.add(layer.clone());
-    }
-    newModel.compile({
-      optimizer: model.optimizer.clone(),
-      loss: model.loss,
-      metrics: model.metrics,
-    });
-    return newModel;
-  }
-
-  async function aggregateModels() {
-    // Collect models from clients
-    const clientModels = clients
-      .filter((client) => client.model)
-      .map((client) => client.model);
-
-    if (clientModels.length === 0) {
-      showNotification('No client models available for aggregation.');
-      return;
-    }
-
-    // Average the weights
-    const averagedWeights = averageWeights(clientModels);
-    serverModel.setWeights(averagedWeights);
-
-    // Evaluate on global test data
-    const evalResult = serverModel.evaluate(globalTestData.x, globalTestData.y, { verbose: 0 });
-    const globalAcc = (await evalResult[1].data())[0];
-    updateGlobalPlot(globalAcc);
-    showNotification(`Global Model Accuracy: ${(globalAcc * 100).toFixed(2)}%`);
-  }
-
-  function averageWeights(models) {
-    const weightArrays = models.map((model) => model.getWeights());
-    const numModels = weightArrays.length;
-    const averaged = [];
-
-    for (let layer = 0; layer < weightArrays[0].length; layer++) {
-      let sum = weightArrays[0][layer].clone();
-      for (let i = 1; i < numModels; i++) {
-        sum = tf.add(sum, weightArrays[i][layer]);
+      // Simulate communication dropout
+      if (Math.random() < dropoutProbability / 100) {
+        showNotification(`Client ${clientId} dropped out during communication.`);
+        return;
       }
-      averaged.push(tf.div(sum, numModels));
+
+      // Load data if not already loaded
+      if (!client.data) {
+        client.data = await loadClientData(clientId, 'train');
+      }
+
+      // Get training parameters
+      const lr = parseFloat(document.getElementById(`lr-${clientId}`).value);
+      const epochs = parseInt(document.getElementById(`epochs-${clientId}`).value);
+
+      // Create a new model and set its weights to the server model's weights
+      client.model = createModel();
+      client.model.setWeights(serverModel.getWeights());
+
+      // Compile the model with the client's learning rate
+      client.model.compile({
+        optimizer: tf.train.adam(lr),
+        loss: 'sparseCategoricalCrossentropy',
+        metrics: ['accuracy'],
+      });
+
+      // Convert data to tensors
+      const xTrain = tf.tensor2d(client.data.x);
+      const yTrain = tf.tensor1d(client.data.y, 'int32');
+
+      // Train the model
+      await client.model.fit(xTrain, yTrain, {
+        epochs: epochs,
+        verbose: 0,
+        callbacks: {
+          onEpochEnd: async (epoch, logs) => {
+            // Update local accuracy plot
+            const acc = logs.acc;
+            client.accuracyHistory.push(acc);
+            updateClientPlot(clientId);
+          },
+        },
+      });
+
+      // Clean up tensors
+      xTrain.dispose();
+      yTrain.dispose();
+
+      // Evaluate on the local test data
+      const testData = await loadClientData(clientId, 'test');
+      const xTest = tf.tensor2d(testData.x);
+      const yTest = tf.tensor1d(testData.y, 'int32');
+      const evalResult = client.model.evaluate(xTest, yTest, { verbose: 0 });
+      const testAcc = (await evalResult[1].data())[0];
+      showNotification(`Client ${clientId} Test Accuracy: ${(testAcc * 100).toFixed(2)}%`);
+      xTest.dispose();
+      yTest.dispose();
     }
-    return averaged;
-  }
+
+    function createModel() {
+      const model = tf.sequential();
+      model.add(tf.layers.dense({ units: 64, activation: 'relu', inputShape: [784] }));
+      model.add(tf.layers.dense({ units: 10, activation: 'softmax' }));
+      return model;
+    }
+
+    // Update the cloneModel function
+    function cloneModel(model) {
+      return model.clone();
+    }
+
+    async function aggregateModels() {
+      // Collect models from clients
+      const clientModels = clients
+        .filter((client) => client.model)
+        .map((client) => client.model);
+
+      if (clientModels.length === 0) {
+        showNotification('No client models available for aggregation.');
+        return;
+      }
+
+      // Average the weights
+      const averagedWeights = averageWeights(clientModels);
+      serverModel.setWeights(averagedWeights);
+
+      // Evaluate on global test data
+      const evalResult = serverModel.evaluate(globalTestData.x, globalTestData.y, { verbose: 0 });
+      const globalAcc = (await evalResult[1].data())[0];
+      updateGlobalPlot(globalAcc);
+      showNotification(`Global Model Accuracy: ${(globalAcc * 100).toFixed(2)}%`);
+    }
+
+    function averageWeights(models) {
+      const weightArrays = models.map((model) => model.getWeights());
+      const numModels = weightArrays.length;
+      const averaged = [];
+
+      for (let layer = 0; layer < weightArrays[0].length; layer++) {
+        let sum = weightArrays[0][layer].clone();
+        for (let i = 1; i < numModels; i++) {
+          sum = tf.add(sum, weightArrays[i][layer]);
+        }
+        averaged.push(tf.div(sum, numModels));
+      }
+      return averaged;
+    }
 
   function initializeGlobalPlot() {
     const ctx = document.getElementById('global-accuracy-plot').getContext('2d');
