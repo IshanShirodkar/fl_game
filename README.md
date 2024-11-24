@@ -1,8 +1,9 @@
 # 🎮 Federated Learning Interactive Game
 
-An interactive web-based demonstration that makes learning about Federated Learning fun! Train models across multiple clients, experiment with different parameters, and watch your global model improve - all without sharing raw data.
+![Non-IID FL Game Demo](/assets/non_iid_demo.gif)
+![IID FL Game Demo](/assets/iid_demo.gif)
 
-![FL Game Demo](/assets/iid_demo.gif)
+An interactive web-based demonstration that makes learning about Federated Learning fun! Train models across multiple clients, experiment with different parameters, and watch your global model improve - all without sharing raw data.
 
 ## 🌟 Features
 
