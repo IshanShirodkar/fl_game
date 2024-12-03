@@ -5,7 +5,7 @@
 </div>
 
 
-Checkout the game at: [FL-Interactive-Game]()
+Checkout the game at: [FL-Interactive-Game](https://ishanshirodkar.github.io/fl_game/)
 
 An interactive web-based demonstration that makes learning about Federated Learning fun! Train models across multiple clients, experiment with different parameters, and watch your global model improve - all without sharing raw data.
 
